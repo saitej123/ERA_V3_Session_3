@@ -10,24 +10,26 @@
     <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
     <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen flex items-center justify-center">
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 min-h-screen">
     <div id="root" class="container mx-auto p-8"></div>
     
     <script type="text/babel">
-    const AnimatedButton = ({ onClick, children, className }) => (
+    const AnimatedButton = ({ onClick, children, className, icon }) => (
         <button
             onClick={onClick}
-            className={`${className} transform transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95 text-lg py-4 px-8`}
+            className={`${className} transform transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95 text-lg py-2 px-4 flex items-center justify-center`}
         >
+            {icon && <i className={`${icon} mr-2`}></i>}
             {children}
         </button>
     );
 
     const FileUpload = ({ onFileChange, accept }) => (
         <div className="relative overflow-hidden inline-block">
-            <AnimatedButton className="bg-blue-500 text-white px-6 py-3 rounded-full shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50">
+            <AnimatedButton className="bg-blue-500 text-white px-4 py-2 rounded-full shadow-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50" icon="fas fa-upload">
                 Choose File
             </AnimatedButton>
             <input
@@ -39,11 +41,82 @@
         </div>
     );
 
+    const TabButton = ({ active, onClick, children, icon, className }) => (
+        <AnimatedButton
+            onClick={onClick}
+            className={`px-6 py-3 rounded-full transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md ${
+                active ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'
+            } ${className}`}
+            icon={icon}
+        >
+            {children}
+        </AnimatedButton>
+    );
+
+    const TextInput = ({ value, onChange }) => (
+        <textarea
+            value={value}
+            onChange={onChange}
+            className="w-full h-64 p-2 border rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            placeholder="Enter text or upload a file..."
+        ></textarea>
+    );
+
+    const ImageInput = ({ src }) => (
+        <img src={src} alt="Input" className="max-w-full h-auto rounded-lg shadow-md" />
+    );
+
+    const AudioInput = ({ src }) => (
+        <audio controls src={src} className="w-full" />
+    );
+
+    const TextOutput = ({ value }) => (
+        <pre className="w-full h-64 p-2 border rounded overflow-auto bg-white">
+            {value}
+        </pre>
+    );
+
+    const ImageOutput = ({ src }) => (
+        <img src={src} alt="Output" className="max-w-full h-auto rounded-lg shadow-md" />
+    );
+
+    const AudioOutput = ({ src }) => (
+        <audio controls src={src} className="w-full" />
+    );
+
+    const ProcessingOptions = ({ options, selectedOption, onChange, onProcess, processButtonText }) => (
+        <div className="space-y-4">
+            <div className="flex justify-center flex-wrap">
+                {options.map((op) => (
+                    <label key={op} className="inline-flex items-center m-2 bg-white rounded-full px-3 py-1 shadow-md">
+                        <input
+                            type="radio"
+                            className="form-radio text-blue-600"
+                            name="operation"
+                            value={op}
+                            checked={selectedOption === op}
+                            onChange={onChange}
+                        />
+                        <span className="ml-2">{op.charAt(0).toUpperCase() + op.slice(1).replace('_', ' ')}</span>
+                    </label>
+                ))}
+            </div>
+            <div className="flex justify-center">
+                <AnimatedButton onClick={onProcess} className="bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md" icon="fas fa-cogs">
+                    {processButtonText}
+                </AnimatedButton>
+            </div>
+        </div>
+    );
+
     const App = () => {
         const [activeTab, setActiveTab] = React.useState('text');
-        const [result, setResult] = React.useState('');
-        const [imageResult, setImageResult] = React.useState('');
-        const [audioResult, setAudioResult] = React.useState('');
+        const [input, setInput] = React.useState('');
+        const [output, setOutput] = React.useState('');
+        const [imageInput, setImageInput] = React.useState('');
+        const [imageOutput, setImageOutput] = React.useState('');
+        const [audioInput, setAudioInput] = React.useState('');
+        const [audioOutput, setAudioOutput] = React.useState('');
         const [imageOperation, setImageOperation] = React.useState('original');
         const [audioOperation, setAudioOperation] = React.useState('original');
         const [fileType, setFileType] = React.useState('');
@@ -61,15 +134,19 @@
             });
             const data = await response.json();
             if (data.type === 'text' || data.type === 'csv') {
-                setResult(data.sample);
-                setImageResult('');
+                setInput(data.sample);
+                setImageInput('');
+                setAudioInput('');
                 setFileType(data.type);
             } else if (data.type === 'image') {
-                setImageResult(data.image);
-                setResult('');
+                setImageInput(data.image);
+                setInput('');
+                setAudioInput('');
                 setFileType('image');
             } else if (data.type === 'audio') {
-                setAudioResult(data.audio);
+                setAudioInput(data.audio);
+                setInput('');
+                setImageInput('');
                 setFileType('audio');
             }
             setLoading(false);
@@ -82,10 +159,16 @@
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: `text=${encodeURIComponent(result)}`,
+                body: `text=${encodeURIComponent(input)}`,
             });
             const data = await response.json();
-            setResult(data[action === 'preprocess' ? 'processed' : action]);
+            if (action === 'ner') {
+                setOutput(JSON.stringify(data.entities, null, 2));
+            } else if (action === 'topic_modeling') {
+                setOutput(data.topics.join('\n'));
+            } else {
+                setOutput(data[action === 'preprocess' ? 'processed' : action]);
+            }
             setLoading(false);
         };
 
@@ -96,17 +179,17 @@
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                body: `data=${encodeURIComponent(JSON.stringify(result))}`,
+                body: `data=${encodeURIComponent(JSON.stringify(input))}`,
             });
             const data = await response.json();
-            setResult(data.cleaned);
+            setOutput(data.cleaned);
             setLoading(false);
         };
 
         const handleImageProcess = async () => {
             setLoading(true);
             const formData = new FormData();
-            formData.append('file', dataURItoBlob(`data:image/png;base64,${imageResult}`));
+            formData.append('file', dataURItoBlob(`data:image/png;base64,${imageInput}`));
             formData.append('operation', imageOperation);
 
             const response = await fetch('/process_image', {
@@ -114,14 +197,14 @@
                 body: formData,
             });
             const data = await response.json();
-            setImageResult(data.image);
+            setImageOutput(data.image);
             setLoading(false);
         };
 
         const handleAudioProcess = async () => {
             setLoading(true);
             const formData = new FormData();
-            formData.append('file', dataURItoBlob(`data:audio/wav;base64,${audioResult}`));
+            formData.append('file', dataURItoBlob(`data:audio/wav;base64,${audioInput}`));
             formData.append('operation', audioOperation);
 
             const response = await fetch('/process_audio', {
@@ -129,7 +212,7 @@
                 body: formData,
             });
             const data = await response.json();
-            setAudioResult(data.audio);
+            setAudioOutput(data.audio);
             setLoading(false);
         };
 
@@ -153,133 +236,115 @@
             'original', 'noise_reduction', 'pitch_shift', 'time_stretch', 'reverb'
         ];
 
+        const handleClear = () => {
+            setInput('');
+            setOutput('');
+            setImageInput('');
+            setImageOutput('');
+            setAudioInput('');
+            setAudioOutput('');
+            setFileType('');
+        };
+
         return (
             <div className="bg-white bg-opacity-80 backdrop-filter backdrop-blur-lg rounded-3xl shadow-2xl p-8 border border-gray-200 animate__animated animate__fadeIn">
                 <h1 className="text-5xl font-bold mb-8 text-center text-gray-800 drop-shadow-sm animate__animated animate__bounceInDown">Data Processing App</h1>
                 
                 <div className="mb-6 flex justify-center space-x-4">
-                    {['text', 'image', 'audio'].map((tab) => (
-                        <AnimatedButton
-                            key={tab}
-                            onClick={() => setActiveTab(tab)}
-                            className={`px-6 py-3 rounded-full transition duration-300 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md ${
-                                activeTab === tab ? 'bg-blue-600 text-white' : 'bg-white text-blue-600'
-                            }`}
+                    {[
+                        { name: 'text', icon: 'fas fa-font', color: 'text-blue-500' },
+                        { name: 'image', icon: 'fas fa-image', color: 'text-green-500' },
+                        { name: 'audio', icon: 'fas fa-music', color: 'text-purple-500' },
+                        { name: '3D', icon: 'fas fa-cube', color: 'text-gray-400', disabled: true }
+                    ].map((tab) => (
+                        <TabButton
+                            key={tab.name}
+                            active={activeTab === tab.name}
+                            onClick={() => !tab.disabled && setActiveTab(tab.name)}
+                            icon={tab.icon}
+                            className={`${tab.color} ${tab.disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                        </AnimatedButton>
+                            {tab.name.charAt(0).toUpperCase() + tab.name.slice(1)}
+                            {tab.disabled && <span className="ml-2 text-xs">(Coming Soon)</span>}
+                        </TabButton>
                     ))}
                 </div>
                 
-                {activeTab === 'text' && (
-                    <div className="space-y-6 animate__animated animate__fadeIn">
-                        <div className="flex items-center justify-center space-x-4">
-                            <FileUpload onFileChange={handleFileUpload} accept=".txt,.csv" />
+                <div className="flex flex-col lg:flex-row lg:space-x-8 space-y-8 lg:space-y-0">
+                    <div className="w-full lg:w-1/2 space-y-4">
+                        <h2 className="text-2xl font-bold mb-4 text-gray-700">Input</h2>
+                        <div className="bg-gray-100 p-4 rounded-lg shadow-inner min-h-[300px] flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                                <FileUpload onFileChange={handleFileUpload} accept={activeTab === 'text' ? '.txt,.csv' : `${activeTab}/*`} />
+                                <AnimatedButton onClick={handleClear} className="bg-red-500 text-white rounded-full hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 shadow-md" icon="fas fa-trash-alt">
+                                    Clear
+                                </AnimatedButton>
+                            </div>
+                            <div className="flex-grow">
+                                {activeTab === 'text' && <TextInput value={input} onChange={(e) => setInput(e.target.value)} />}
+                                {activeTab === 'image' && imageInput && <ImageInput src={`data:image/png;base64,${imageInput}`} />}
+                                {activeTab === 'audio' && audioInput && <AudioInput src={`data:audio/wav;base64,${audioInput}`} />}
+                            </div>
                         </div>
-                        
-                        <div className="bg-gray-50 p-6 rounded-xl min-h-[200px] border border-gray-200 text-gray-800 overflow-auto">
-                            {loading ? (
-                                <div className="flex justify-center items-center h-full">
-                                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500"></div>
-                                </div>
-                            ) : fileType === 'csv' ? (
-                                <div dangerouslySetInnerHTML={{ __html: result }} />
-                            ) : (
-                                <pre>{result}</pre>
-                            )}
+                    </div>
+                    
+                    <div className="w-full lg:w-1/2 space-y-4">
+                        <h2 className="text-2xl font-bold mb-4 text-gray-700">Output</h2>
+                        <div className="bg-gray-100 p-4 rounded-lg shadow-inner min-h-[300px] flex flex-col">
+                            <div className="flex-grow">
+                                {activeTab === 'text' && <TextOutput value={output} />}
+                                {activeTab === 'image' && imageOutput && <ImageOutput src={`data:image/png;base64,${imageOutput}`} />}
+                                {activeTab === 'audio' && audioOutput && <AudioOutput src={`data:audio/wav;base64,${audioOutput}`} />}
+                            </div>
                         </div>
-                        
+                    </div>
+                </div>
+                
+                <div className="mt-8 space-y-4">
+                    {activeTab === 'text' && (
                         <div className="flex justify-center space-x-4 flex-wrap">
-                            <AnimatedButton onClick={() => handleProcess('preprocess')} className="bg-green-500 text-white rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 shadow-md m-2">
+                            <AnimatedButton onClick={() => handleProcess('preprocess')} className="bg-green-500 text-white rounded-full hover:bg-green-600 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-50 shadow-md m-2" icon="fas fa-cogs">
                                 Preprocess
                             </AnimatedButton>
-                            <AnimatedButton onClick={() => handleProcess('ner')} className="bg-purple-500 text-white rounded-full hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 shadow-md m-2">
+                            <AnimatedButton onClick={() => handleProcess('ner')} className="bg-purple-500 text-white rounded-full hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 shadow-md m-2" icon="fas fa-tag">
                                 NER
                             </AnimatedButton>
-                            <AnimatedButton onClick={() => handleProcess('topic_modeling')} className="bg-yellow-500 text-white rounded-full hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 shadow-md m-2">
+                            <AnimatedButton onClick={() => handleProcess('topic_modeling')} className="bg-yellow-500 text-white rounded-full hover:bg-yellow-600 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-opacity-50 shadow-md m-2" icon="fas fa-list">
                                 Topic Modeling
                             </AnimatedButton>
-                            <AnimatedButton onClick={() => handleProcess('classify')} className="bg-red-500 text-white rounded-full hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 shadow-md m-2">
+                            <AnimatedButton onClick={() => handleProcess('classify')} className="bg-red-500 text-white rounded-full hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-opacity-50 shadow-md m-2" icon="fas fa-tasks">
                                 Classify
                             </AnimatedButton>
                             {fileType === 'csv' && (
-                                <AnimatedButton onClick={handleCSVClean} className="bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md m-2">
+                                <AnimatedButton onClick={handleCSVClean} className="bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md m-2" icon="fas fa-broom">
                                     Clean CSV
                                 </AnimatedButton>
                             )}
                         </div>
-                    </div>
-                )}
-
-                {activeTab === 'image' && (
-                    <div className="space-y-6 animate__animated animate__fadeIn">
-                        <div className="flex items-center justify-center space-x-4">
-                            <FileUpload onFileChange={handleFileUpload} accept="image/*" />
-                        </div>
-                        
-                        {imageResult && (
-                            <div className="space-y-4">
-                                <img src={`data:image/png;base64,${imageResult}`} alt="Processed" className="max-w-full h-auto rounded-lg shadow-md" />
-                                
-                                <div className="flex justify-center flex-wrap">
-                                    {imageOperations.map((op) => (
-                                        <label key={op} className="inline-flex items-center m-2">
-                                            <input
-                                                type="radio"
-                                                className="form-radio text-blue-600"
-                                                name="imageOperation"
-                                                value={op}
-                                                checked={imageOperation === op}
-                                                onChange={(e) => setImageOperation(e.target.value)}
-                                            />
-                                            <span className="ml-2">{op.charAt(0).toUpperCase() + op.slice(1).replace('_', ' ')}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                                
-                                <div className="flex justify-center">
-                                    <AnimatedButton onClick={handleImageProcess} className="bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md">
-                                        Process Image
-                                    </AnimatedButton>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {activeTab === 'audio' && (
-                    <div className="space-y-6 animate__animated animate__fadeIn">
-                        <div className="flex items-center justify-center space-x-4">
-                            <FileUpload onFileChange={handleFileUpload} accept="audio/*" />
-                        </div>
-                        
-                        {audioResult && (
-                            <div className="space-y-4">
-                                <audio controls src={`data:audio/wav;base64,${audioResult}`} className="w-full" />
-                                
-                                <div className="flex justify-center flex-wrap">
-                                    {audioOperations.map((op) => (
-                                        <label key={op} className="inline-flex items-center m-2">
-                                            <input
-                                                type="radio"
-                                                className="form-radio text-blue-600"
-                                                name="audioOperation"
-                                                value={op}
-                                                checked={audioOperation === op}
-                                                onChange={(e) => setAudioOperation(e.target.value)}
-                                            />
-                                            <span className="ml-2">{op.charAt(0).toUpperCase() + op.slice(1).replace('_', ' ')}</span>
-                                        </label>
-                                    ))}
-                                </div>
-                                
-                                <div className="flex justify-center">
-                                    <AnimatedButton onClick={handleAudioProcess} className="bg-blue-500 text-white rounded-full hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-md">
-                                        Process Audio
-                                    </AnimatedButton>
-                                </div>
-                            </div>
-                        )}
+                    )}
+                    {activeTab === 'image' && (
+                        <ProcessingOptions
+                            options={imageOperations}
+                            selectedOption={imageOperation}
+                            onChange={(e) => setImageOperation(e.target.value)}
+                            onProcess={handleImageProcess}
+                            processButtonText="Process Image"
+                        />
+                    )}
+                    {activeTab === 'audio' && (
+                        <ProcessingOptions
+                            options={audioOperations}
+                            selectedOption={audioOperation}
+                            onChange={(e) => setAudioOperation(e.target.value)}
+                            onProcess={handleAudioProcess}
+                            processButtonText="Process Audio"
+                        />
+                    )}
+                </div>
+                
+                {loading && (
+                    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+                        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-white"></div>
                     </div>
                 )}
             </div>
