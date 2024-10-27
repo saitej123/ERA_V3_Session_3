@@ -1,13 +1,23 @@
 import io
 import librosa
+import soundfile as sf
 import numpy as np
 import base64
-from typing import Tuple, Union
+from typing import Union
 from numpy.typing import NDArray
+from pydub import AudioSegment
 
 def process_audio(contents: bytes, operation: str = 'original') -> str:
-    y, sr = librosa.load(io.BytesIO(contents))
-    
+    # Convert the audio to WAV format using pydub
+    audio = AudioSegment.from_file(io.BytesIO(contents))
+    wav_io = io.BytesIO()
+    audio.export(wav_io, format='wav')
+    wav_io.seek(0)
+
+    # Load the audio data using librosa
+    y, sr = librosa.load(wav_io, sr=None)
+
+    # Apply the selected operation
     if operation == 'noise_reduction':
         y = librosa.effects.preemphasis(y)
     elif operation == 'pitch_shift':
@@ -17,6 +27,11 @@ def process_audio(contents: bytes, operation: str = 'original') -> str:
     elif operation == 'reverb':
         y = np.concatenate([y, librosa.effects.preemphasis(y)])
     
-    audio_bytes = librosa.util.buf_to_float(y)
-    audio_base64 = base64.b64encode(audio_bytes.tobytes()).decode('utf-8')
+    # Convert the processed audio to WAV format
+    buffer = io.BytesIO()
+    sf.write(buffer, y, sr, format='wav')
+    buffer.seek(0)
+    
+    # Encode the WAV data to base64
+    audio_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
     return audio_base64

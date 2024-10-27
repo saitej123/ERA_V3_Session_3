@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, File, UploadFile, Form
+from fastapi import FastAPI, Request, File, UploadFile, Form, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
@@ -50,10 +50,22 @@ async def upload_camera(image: str = Form(...)):
     return {"image": processed_image, "type": "image"}
 
 @app.post("/upload_audio")
-async def upload_audio(audio: str = Form(...)):
-    audio_data = base64.b64decode(audio.split(',')[1])
-    processed_audio = process_audio(audio_data)
-    return {"audio": processed_audio, "type": "audio"}
+async def upload_audio(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        processed_audio = process_audio(contents)
+        return {"audio": processed_audio, "type": "audio"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing audio: {str(e)}")
+
+@app.post("/process_audio")
+async def process_audio_endpoint(file: UploadFile = File(...), operation: str = Form(...)):
+    try:
+        contents = await file.read()
+        processed_audio = process_audio(contents, operation)
+        return JSONResponse(content={"audio": processed_audio})
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error processing audio: {str(e)}")
 
 @app.post("/text_clean")
 async def text_clean(text: str = Form(...)):
@@ -86,6 +98,11 @@ async def process_image_endpoint(file: UploadFile = File(...), operation: str = 
     contents = await file.read()
     processed_image = process_image(contents, operation)
     return JSONResponse(content={"image": processed_image})
+
+@app.post("/preprocess")
+async def preprocess(text: str = Form(...)):
+    processed_text = preprocess_text(text)
+    return {"processed": processed_text[:1000]}
 
 def process_image(contents: bytes, operation: str = 'original') -> str:
     nparr = np.frombuffer(contents, np.uint8)
