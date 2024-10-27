@@ -7,39 +7,58 @@ import pandas as pd
 import cv2
 import numpy as np
 import base64
-from .preprocessing import preprocess_text, clean_csv, perform_ner, perform_topic_modeling, classify_text, process_audio
+from .preprocessing import preprocess_text, clean_csv, perform_ner, perform_topic_modeling, classify_text
+from .audio_processing import process_audio
 import json
 import librosa
+import typing
 
 app = FastAPI()
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-@app.get("/", response_class=FileResponse)
-async def read_root():
-    return FileResponse("templates/index.html")
+@app.get("/", response_class=HTMLResponse)
+async def read_root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    contents = await file.read()
-    if file.filename.endswith('.csv'):
-        df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
-        return {"sample": df.head().to_html(), "type": "csv"}
-    elif file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
-        image = process_image(contents)
-        return {"image": image, "type": "image"}
-    elif file.filename.lower().endswith(('.wav', '.mp3')):
-        audio_data = process_audio(contents)
-        return {"audio": audio_data, "type": "audio"}
-    else:
-        text = contents.decode("utf-8")
+async def upload_file(file: UploadFile = File(None), text: str = Form(None)):
+    if file:
+        contents = await file.read()
+        if file.filename and file.filename.endswith('.csv'):
+            df = pd.read_csv(io.StringIO(contents.decode('utf-8')))
+            return {"sample": df.head().to_html(), "type": "csv"}
+        elif file.filename and file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+            image = process_image(contents)
+            return {"image": image, "type": "image"}
+        elif file.filename and file.filename.lower().endswith(('.wav', '.mp3')):
+            audio_data = process_audio(contents)
+            return {"audio": audio_data, "type": "audio"}
+        else:
+            text = contents.decode("utf-8")
+    
+    if text:
         return {"sample": text[:1000], "type": "text"}
+    
+    return {"error": "No file or text provided"}
 
-@app.post("/preprocess")
-async def preprocess(text: str = Form(...)):
+@app.post("/upload_camera")
+async def upload_camera(image: str = Form(...)):
+    image_data = base64.b64decode(image.split(',')[1])
+    processed_image = process_image(image_data)
+    return {"image": processed_image, "type": "image"}
+
+@app.post("/upload_audio")
+async def upload_audio(audio: str = Form(...)):
+    audio_data = base64.b64decode(audio.split(',')[1])
+    processed_audio = process_audio(audio_data)
+    return {"audio": processed_audio, "type": "audio"}
+
+@app.post("/text_clean")
+async def text_clean(text: str = Form(...)):
     processed_text = preprocess_text(text)
-    return {"processed": processed_text[:1000]}
+    return {"cleaned_text": processed_text[:1000]}
 
 @app.post("/clean_csv")
 async def clean_csv_endpoint(data: str = Form(...)):
@@ -68,13 +87,7 @@ async def process_image_endpoint(file: UploadFile = File(...), operation: str = 
     processed_image = process_image(contents, operation)
     return JSONResponse(content={"image": processed_image})
 
-@app.post("/process_audio")
-async def process_audio_endpoint(file: UploadFile = File(...), operation: str = Form(...)):
-    contents = await file.read()
-    processed_audio = process_audio(contents, operation)
-    return JSONResponse(content={"audio": processed_audio})
-
-def process_image(contents, operation='original'):
+def process_image(contents: bytes, operation: str = 'original') -> str:
     nparr = np.frombuffer(contents, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
@@ -101,20 +114,4 @@ def process_image(contents, operation='original'):
         img = cv2.divide(gray, 255 - gauss, scale=256)
     
     _, buffer = cv2.imencode('.png', img)
-    return base64.b64encode(buffer).decode('utf-8')
-
-def process_audio(contents, operation='original'):
-    y, sr = librosa.load(io.BytesIO(contents))
-    
-    if operation == 'noise_reduction':
-        y = librosa.effects.preemphasis(y)
-    elif operation == 'pitch_shift':
-        y = librosa.effects.pitch_shift(y, sr=sr, n_steps=2)
-    elif operation == 'time_stretch':
-        y = librosa.effects.time_stretch(y, rate=1.2)
-    elif operation == 'reverb':
-        y = np.concatenate([y, librosa.effects.preemphasis(y)])
-    
-    audio_bytes = librosa.util.buf_to_float(y)
-    audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
-    return audio_base64
+    return base64.b64encode(buffer.tobytes()).decode('utf-8')
